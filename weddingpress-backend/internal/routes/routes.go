@@ -58,6 +58,11 @@ func SetupRoutes(r *gin.Engine) {
 			admin.PUT("/guest/:id", handlers.UpdateGuest)
 			admin.DELETE("/guest/:id", handlers.DeleteGuest)
 
+			// !!! INI BARIS YANG DITAMBAHKAN !!!
+			admin.POST("/guests/import", handlers.ImportGuests)
+			// !!! TAMBAHKAN BARIS INI !!!
+			admin.DELETE("/guest/bulk", handlers.DeleteGuestsBulk)
+
 			// GuestBook (Admin)
 			admin.GET("/guestbook", handlers.GetGuestBookAdmin)
 			admin.PUT("/guestbook/:id", handlers.UpdateGuestBookStatus) // Approve/Reject

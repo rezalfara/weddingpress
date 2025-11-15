@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -9,8 +10,22 @@ import (
 	"weddingpress_backend/internal/services" // Import utils kita
 
 	"github.com/gin-gonic/gin"
+	"github.com/xuri/excelize/v2" // <-- TAMBAHAN
 	"gorm.io/gorm"
 )
+
+// !!! 1. TAMBAHKAN STRUCT INI DI ATAS !!!
+type BulkDeleteInput struct {
+	IDs []uint `json:"ids" binding:"required"`
+}
+
+// (BARU) Struct untuk respons JSON Dashboard
+type DashboardStats struct {
+	TotalGuests      int64 `json:"total_guests"`
+	TotalRSVP        int64 `json:"total_rsvp"`
+	TotalAttendance  int64 `json:"total_attendance"`
+	PendingGuestbook int64 `json:"pending_guestbook"`
+}
 
 // Helper untuk mengambil WeddingID dari UserID yang terautentikasi
 // Ini adalah KUNCI dari multi-tenancy kita (admin hanya bisa edit data miliknya)
@@ -644,4 +659,176 @@ func DeleteGuestBook(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Guestbook entry deleted"})
+}
+
+// !!! INI FUNGSI YANG DITAMBAHKAN !!!
+
+// ImportGuests menangani upload dan pemrosesan file Excel untuk impor tamu
+func ImportGuests(c *gin.Context) {
+	weddingID, err := getWeddingIDFromAuth(c)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Wedding not found"})
+		return
+	}
+
+	// 1. Ambil file dari form-data dengan nama "file"
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Excel file 'file' is required in form-data"})
+		return
+	}
+
+	// 2. Buka file yang diupload
+	src, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open uploaded file"})
+		return
+	}
+	defer src.Close()
+
+	// 3. Baca file Excel menggunakan excelize
+	f, err := excelize.OpenReader(src)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read excel file"})
+		return
+	}
+
+	// 4. Asumsikan data ada di sheet pertama (default "Sheet1")
+	//    Format: Kolom A = Nama, Kolom B = Grup
+	rows, err := f.GetRows("Sheet1")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get rows from 'Sheet1'"})
+		return
+	}
+
+	// 5. Mulai Transaksi Database
+	tx := db.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	importedCount := 0
+
+	// 6. Loop setiap baris (lewat baris pertama, i=0, karena itu header)
+	for i, row := range rows {
+		if i == 0 {
+			continue // Lewati baris header (Nama, Grup)
+		}
+
+		var name, group string
+		if len(row) > 0 {
+			name = row[0] // Kolom A
+		}
+		if len(row) > 1 {
+			group = row[1] // Kolom B
+		}
+
+		// Jangan impor jika nama kosong
+		if name == "" {
+			continue
+		}
+
+		// 7. Buat slug unik (menggunakan logika yang sama dari CreateGuest)
+		baseSlug := services.Slugify(name)
+		slug := baseSlug
+		var count int64
+
+		// PENTING: Kita cek slug menggunakan 'tx' (transaksi)
+		// agar tidak ada duplikat dalam batch yang sama.
+		for j := 1; ; j++ {
+			tx.Model(&models.Guest{}).Where("slug = ?", slug).Count(&count)
+			if count == 0 {
+				break // Slug unik ditemukan
+			}
+			// Jika sudah ada, tambahkan suffix acak
+			slug = baseSlug + "-" + services.RandomString(4)
+		}
+
+		// 8. Buat data Guest
+		guest := models.Guest{
+			WeddingID: weddingID,
+			Name:      name,
+			Slug:      slug,
+			Group:     group,
+		}
+
+		// 9. Simpan ke database (masih dalam transaksi)
+		if err := tx.Create(&guest).Error; err != nil {
+			tx.Rollback() // Batalkan semua impor jika 1 saja gagal
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":  fmt.Sprintf("Failed to import guest on excel row %d (%s)", i+1, name),
+				"detail": err.Error(),
+			})
+			return
+		}
+		importedCount++
+	}
+
+	// 10. Jika semua sukses, commit transaksi
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit error"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message":      "Guests imported successfully",
+		"guests_added": importedCount,
+	})
+}
+
+// DeleteGuestsBulk menghapus beberapa tamu sekaligus
+func DeleteGuestsBulk(c *gin.Context) {
+	weddingID, err := getWeddingIDFromAuth(c)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Wedding not found"})
+		return
+	}
+
+	var input BulkDeleteInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: 'ids' array is required"})
+		return
+	}
+
+	if len(input.IDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No IDs provided"})
+		return
+	}
+
+	// Gunakan Transaksi
+	tx := db.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// 1. Hapus GuestBook terkait terlebih dahulu untuk menghindari error foreign key
+	if err := tx.Where("guest_id IN ?", input.IDs).Delete(&models.GuestBook{}).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete associated guestbook entries"})
+		return
+	}
+
+	// 2. Hapus Tamu, pastikan tamu tersebut milik weddingID yang terautentikasi
+	// Ini adalah cek keamanan yang penting
+	result := tx.Where("id IN ? AND wedding_id = ?", input.IDs, weddingID).Delete(&models.Guest{})
+	if result.Error != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete guests"})
+		return
+	}
+
+	// Commit transaksi
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":       "Selected guests deleted successfully",
+		"deleted_count": result.RowsAffected,
+	})
 }
