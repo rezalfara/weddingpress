@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"errors" // <-- TAMBAHAN (Untuk Bug Fix)
 	"fmt"
+	"log" // <-- TAMBAHAN (Untuk Bug Fix)
 	"net/http"
 	"time"
 
@@ -10,21 +12,13 @@ import (
 	"weddingpress_backend/internal/services" // Import utils kita
 
 	"github.com/gin-gonic/gin"
-	"github.com/xuri/excelize/v2" // <-- TAMBAHAN
+	"github.com/xuri/excelize/v2" // <-- Fungsionalitas Baru
 	"gorm.io/gorm"
 )
 
 // !!! 1. TAMBAHKAN STRUCT INI DI ATAS !!!
 type BulkDeleteInput struct {
 	IDs []uint `json:"ids" binding:"required"`
-}
-
-// (BARU) Struct untuk respons JSON Dashboard
-type DashboardStats struct {
-	TotalGuests      int64 `json:"total_guests"`
-	TotalRSVP        int64 `json:"total_rsvp"`
-	TotalAttendance  int64 `json:"total_attendance"`
-	PendingGuestbook int64 `json:"pending_guestbook"`
 }
 
 // Helper untuk mengambil WeddingID dari UserID yang terautentikasi
@@ -343,11 +337,38 @@ func GetStories(c *gin.Context) {
 	c.JSON(http.StatusOK, stories)
 }
 
+// --- MULAI PERBAIKAN BUG ---
+
+// UBAH STRUCT INI: Terima 'date' sebagai string
 type StoryInput struct {
-	Title       string    `json:"title" binding:"required"`
-	Date        time.Time `json:"date" binding:"required"`
-	Description string    `json:"description"`
-	Order       int       `json:"order"`
+	Title       string `json:"title" binding:"required"`
+	Date        string `json:"date" binding:"required"` // <-- UBAH TIPE MENJADI STRING
+	Description string `json:"description"`
+	Order       int    `json:"order"`
+}
+
+// Fungsi helper untuk parsing tanggal
+func parseDateString(dateStr string) (time.Time, error) {
+	// Coba parsing format RFC3339 (jika frontend kirim timestamp penuh)
+	// format: "2025-11-05T00:00:00+07:00" atau "2025-11-04T17:00:00Z"
+	parsedDate, err := time.Parse(time.RFC3339, dateStr)
+	if err == nil {
+		return parsedDate, nil
+	}
+
+	// Jika gagal, coba parsing format YYYY-MM-DD
+	// format: "2025-11-05"
+	log.Printf("Gagal parse RFC3339 (%v), mencoba format YYYY-MM-DD", err)
+	parsedDate, err = time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		log.Printf("Gagal parse YYYY-MM-DD (%v)", err)
+		return time.Time{}, errors.New("invalid date format. Use RFC3339 or YYYY-MM-DD")
+	}
+
+	// Jika formatnya YYYY-MM-DD, Go akan mengasumsikannya sebagai UTC
+	// Ini tidak masalah, karena kita hanya peduli tanggalnya (5 Nov UTC vs 5 Nov WIB)
+	// Keduanya akan disimpan sebagai "5 Nov" di kolom DATE.
+	return parsedDate, nil
 }
 
 func CreateStory(c *gin.Context) {
@@ -363,10 +384,18 @@ func CreateStory(c *gin.Context) {
 		return
 	}
 
+	// --- TAMBAHKAN BLOK PARSING INI ---
+	parsedDate, err := parseDateString(input.Date)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// --- SELESAI BLOK PARSING ---
+
 	story := models.Story{
 		WeddingID:   weddingID,
 		Title:       input.Title,
-		Date:        input.Date,
+		Date:        parsedDate, // <-- Gunakan tanggal yang sudah di-parse
 		Description: input.Description,
 		Order:       input.Order,
 	}
@@ -392,6 +421,14 @@ func UpdateStory(c *gin.Context) {
 		return
 	}
 
+	// --- TAMBAHKAN BLOK PARSING INI ---
+	parsedDate, err := parseDateString(input.Date)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// --- SELESAI BLOK PARSING ---
+
 	var story models.Story
 	if err := db.DB.Where("id = ? AND wedding_id = ?", storyID, weddingID).First(&story).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Story not found"})
@@ -399,7 +436,7 @@ func UpdateStory(c *gin.Context) {
 	}
 
 	story.Title = input.Title
-	story.Date = input.Date
+	story.Date = parsedDate // <-- Gunakan tanggal yang sudah di-parse
 	story.Description = input.Description
 	story.Order = input.Order
 
@@ -409,6 +446,8 @@ func UpdateStory(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, story)
 }
+
+// --- SELESAI PERBAIKAN BUG ---
 
 func DeleteStory(c *gin.Context) {
 	weddingID, err := getWeddingIDFromAuth(c)
