@@ -77,13 +77,25 @@ export function StoryForm({ story, onSuccess, children }: StoryFormProps) {
   };
 
   const onSubmit = async (data: StoryFormValues) => {
+    
+    // --- TAMBAHAN MULAI DARI SINI ---
+    // Buat payload baru untuk API
+    const apiPayload = {
+      title: data.title,
+      description: data.description,
+      order: data.order,
+      // Format objek 'Date' menjadi string "yyyy-MM-dd"
+      date: format(data.date, 'yyyy-MM-dd'),
+    };
+    // --- TAMBAHAN SELESAI ---
+
     try {
       if (story) {
         // Mode Edit
-        await api.put(`/admin/story/${story.id}`, data);
+        await api.put(`/admin/story/${story.id}`, apiPayload); // <-- Gunakan apiPayload
       } else {
         // Mode Create
-        await api.post("/admin/story", data);
+        await api.post("/admin/story", apiPayload); // <-- Gunakan apiPayload
       }
       toast.success("Sukses", {
         description: "Data cerita berhasil disimpan.",
