@@ -18,11 +18,18 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner"; // <-- IMPORT SONNER
+import { toast } from "sonner";
 import { ImageUpload } from "@/components/ImageUpload";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+// --- IMPORT KOMPONEN TABS ---
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 
-// Skema validasi Zod berdasarkan UpdateWeddingInput di backend
+// Skema Zod (tetap sama)
 const formSchema = z.object({
   wedding_title: z.string().min(1, "Judul tidak boleh kosong"),
   cover_image_url: z.string().url().or(z.literal("")),
@@ -38,11 +45,9 @@ const formSchema = z.object({
   }),
 });
 
-// Fungsi fetcher untuk SWR
 const fetcher = (url: string) => api.get(url).then((res) => res.data);
 
 export default function WeddingPage() {
-  // Fetch data awal
   const { data: weddingData, error, mutate } = useSWR<Wedding>("/admin/wedding", fetcher);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -63,7 +68,7 @@ export default function WeddingPage() {
     },
   });
 
-  // Isi form dengan data dari SWR
+  // useEffect (tetap sama)
   useEffect(() => {
     if (weddingData) {
       form.reset({
@@ -83,11 +88,11 @@ export default function WeddingPage() {
     }
   }, [weddingData, form]);
 
+  // onSubmit (tetap sama)
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      // Kirim data ke backend
       await api.put("/admin/wedding", values);
-      mutate(); // Re-fetch data
+      mutate();
       toast.success("Sukses", {
         description: "Data pernikahan berhasil diperbarui.",
       });
@@ -102,8 +107,9 @@ export default function WeddingPage() {
   if (!weddingData) return <div>Loading...</div>;
 
   return (
+    // Tag <Form> sekarang membungkus SEMUANYA, termasuk Tabs
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold">Pengaturan Wedding</h1>
           <Button type="submit" disabled={form.formState.isSubmitting}>
@@ -111,156 +117,168 @@ export default function WeddingPage() {
           </Button>
         </div>
 
-        {/* Pengaturan Umum */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Pengaturan Umum</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <FormField
-              control={form.control}
-              name="wedding_title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Judul Pernikahan</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="theme_color"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Warna Tema (Hex)</FormLabel>
-                  <FormControl>
-                    <Input type="color" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="music_url"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>URL Musik (MP3)</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="https://..." />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="cover_image_url"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Cover Image</FormLabel>
-                  <FormControl>
-                    <ImageUpload value={field.value} onChange={field.onChange} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </CardContent>
-        </Card>
+        {/* --- GUNAKAN TABS DI SINI --- */}
+        <Tabs defaultValue="umum" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
+            <TabsTrigger value="umum">Pengaturan Umum</TabsTrigger>
+            <TabsTrigger value="mempelai">Data Mempelai</TabsTrigger>
+          </TabsList>
 
-        {/* Pengaturan Mempelai */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Data Mempelai</CardTitle>
-          </CardHeader>
-          <CardContent className="grid md:grid-cols-2 gap-8">
-            {/* Mempelai Pria */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Mempelai Pria</h3>
-              <FormField
-                control={form.control}
-                name="groom_bride.groom_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nama Mempelai Pria</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="groom_bride.groom_bio"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Bio Pria (Nama orang tua, dll)</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="groom_bride.groom_photo_url"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Foto Mempelai Pria</FormLabel>
-                    <FormControl>
-                      <ImageUpload value={field.value} onChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </div>
-            
-            {/* Mempelai Wanita */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Mempelai Wanita</h3>
-              <FormField
-                control={form.control}
-                name="groom_bride.bride_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nama Mempelai Wanita</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="groom_bride.bride_bio"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Bio Wanita (Nama orang tua, dll)</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="groom_bride.bride_photo_url"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Foto Mempelai Wanita</FormLabel>
-                    <FormControl>
-                      <ImageUpload value={field.value} onChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </div>
-          </CardContent>
-        </Card>
+          {/* === KONTEN TAB 1: PENGATURAN UMUM === */}
+          <TabsContent value="umum">
+            <Card>
+              <CardHeader>
+                <CardTitle>Pengaturan Umum</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="wedding_title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Judul Pernikahan</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="theme_color"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Warna Tema (Hex)</FormLabel>
+                      <FormControl>
+                        <Input type="color" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="music_url"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>URL Musik (MP3)</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="https://..." />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="cover_image_url"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Cover Image</FormLabel>
+                      <FormControl>
+                        <ImageUpload value={field.value} onChange={field.onChange} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* === KONTEN TAB 2: DATA MEMPELAI === */}
+          <TabsContent value="mempelai">
+            <Card>
+              <CardHeader>
+                <CardTitle>Data Mempelai</CardTitle>
+              </CardHeader>
+              <CardContent className="grid md:grid-cols-2 gap-8">
+                {/* Mempelai Pria */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Mempelai Pria</h3>
+                  <FormField
+                    control={form.control}
+                    name="groom_bride.groom_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nama Mempelai Pria</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="groom_bride.groom_bio"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Bio Pria</FormLabel>
+                        <FormControl>
+                          <Textarea {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="groom_bride.groom_photo_url"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Foto Mempelai Pria</FormLabel>
+                        <FormControl>
+                          <ImageUpload value={field.value} onChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                {/* Mempelai Wanita */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Mempelai Wanita</h3>
+                  <FormField
+                    control={form.control}
+                    name="groom_bride.bride_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nama Mempelai Wanita</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="groom_bride.bride_bio"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Bio Wanita</FormLabel>
+                        <FormControl>
+                          <Textarea {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="groom_bride.bride_photo_url"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Foto Mempelai Wanita</FormLabel>
+                        <FormControl>
+                          <ImageUpload value={field.value} onChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </form>
     </Form>
   );

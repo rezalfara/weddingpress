@@ -119,4 +119,17 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* --- TAMBAHKAN KODE DI BAWAH INI --- */
+
+  /* Ini akan membuat class utility baru.
+    Sekarang Anda bisa menggunakan className="bg-theme" atau className="text-theme"
+    untuk menerapkan warna dari --theme-color Anda.
+  */
+  .bg-theme {
+    @apply bg-[var(--theme-color)];
+  }
+  .text-theme {
+    @apply text-[var(--theme-color)];
+  }
 }
