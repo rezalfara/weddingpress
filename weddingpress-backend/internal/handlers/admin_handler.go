@@ -21,6 +21,13 @@ type BulkDeleteInput struct {
 	IDs []uint `json:"ids" binding:"required"`
 }
 
+type GiftAccountInput struct {
+	BankName      string `json:"bank_name" binding:"required"`
+	AccountNumber string `json:"account_number" binding:"required"`
+	AccountName   string `json:"account_name" binding:"required"`
+	QRCodeURL     string `json:"qr_code_url"`
+}
+
 // Helper untuk mengambil WeddingID dari UserID yang terautentikasi
 // Ini adalah KUNCI dari multi-tenancy kita (admin hanya bisa edit data miliknya)
 func getWeddingIDFromAuth(c *gin.Context) (uint, error) {
@@ -72,6 +79,14 @@ type UpdateWeddingInput struct {
 	MusicURL      string            `json:"music_url"`
 	ThemeColor    string            `json:"theme_color"`
 	GroomBride    models.GroomBride `json:"groom_bride"`
+
+	// --- TAMBAHKAN FIELD KUSTOMISASI DI SINI ---
+	ShowEvents    bool `json:"show_events"`
+	ShowStory     bool `json:"show_story"`
+	ShowGallery   bool `json:"show_gallery"`
+	ShowGifts     bool `json:"show_gifts"`
+	ShowGuestBook bool `json:"show_guest_book"`
+	// ------------------------------------------
 }
 
 func UpdateMyWedding(c *gin.Context) {
@@ -95,18 +110,32 @@ func UpdateMyWedding(c *gin.Context) {
 		}
 	}()
 
+	// --- PERBAIKAN DI SINI ---
+	// Kita harus menggunakan .Select() untuk memaksa GORM meng-update field 'false' (zero value).
+	fieldsToUpdate := []string{
+		"WeddingTitle", "CoverImageURL", "MusicURL", "ThemeColor",
+		"ShowEvents", "ShowStory", "ShowGallery", "ShowGifts", "ShowGuestBook",
+	}
+
 	// 1. Update data Wedding
 	wedding := models.Wedding{ID: weddingID}
-	if err := tx.Model(&wedding).Updates(models.Wedding{
+	if err := tx.Model(&wedding).Select(fieldsToUpdate).Updates(models.Wedding{
 		WeddingTitle:  input.WeddingTitle,
 		CoverImageURL: input.CoverImageURL,
 		MusicURL:      input.MusicURL,
 		ThemeColor:    input.ThemeColor,
+
+		ShowEvents:    input.ShowEvents,
+		ShowStory:     input.ShowStory,
+		ShowGallery:   input.ShowGallery,
+		ShowGifts:     input.ShowGifts,
+		ShowGuestBook: input.ShowGuestBook,
 	}).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update wedding"})
 		return
 	}
+	// --- AKHIR PERBAIKAN ---
 
 	// 2. Update data GroomBride (Upsert)
 	groomBride := input.GroomBride
@@ -479,13 +508,67 @@ func GetGuests(c *gin.Context) {
 		return
 	}
 
+	// --- PERUBAHAN DIMULAI DI SINI ---
+
+	// 1. Ambil query parameter dari URL
+	search := c.Query("search")
+	group := c.Query("group")
+
+	// 2. Buat query GORM dinamis
+	// Kita mulai dengan model dan filter wedding_id
+	query := db.DB.Model(&models.Guest{}).Where("wedding_id = ?", weddingID)
+
+	// 3. Tambahkan filter pencarian (jika search tidak kosong)
+	if search != "" {
+		// Gunakan ILIKE untuk pencarian case-insensitive (PostgreSQL)
+		// Jika menggunakan MySQL, ganti dengan LIKE dan ubah manual ke Lowercase
+		query = query.Where("name ILIKE ?", "%"+search+"%")
+	}
+
+	// 4. Tambahkan filter grup (jika group tidak kosong)
+	if group != "" {
+		query = query.Where("\"group\" = ?", group) // "group" perlu di-escape
+	}
+
+	// 5. Eksekusi query yang sudah difilter
 	var guests []models.Guest
-	if err := db.DB.Where("wedding_id = ?", weddingID).Order("created_at DESC").Find(&guests).Error; err != nil {
+	if err := query.Order("created_at DESC").Find(&guests).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch guests"})
 		return
 	}
 
+	// --- PERUBAHAN SELESAI ---
+
 	c.JSON(http.StatusOK, guests)
+}
+
+// === TAMBAHKAN HANDLER BARU DI BAWAH INI ===
+
+// GetGuestGroups mengembalikan daftar unik semua grup tamu
+func GetGuestGroups(c *gin.Context) {
+	weddingID, err := getWeddingIDFromAuth(c)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Wedding not found"})
+		return
+	}
+
+	var groups []string
+
+	// Query ini akan:
+	// 1. Memfilter berdasarkan weddingID
+	// 2. Memilih "group" yang unik (Distinct)
+	// 3. Mengabaikan nilai NULL atau string kosong
+	err = db.DB.Model(&models.Guest{}).
+		Where("wedding_id = ? AND \"group\" IS NOT NULL AND \"group\" != ''", weddingID).
+		Distinct().
+		Pluck("\"group\"", &groups).Error // Pluck mengambil satu kolom ke slice
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch groups"})
+		return
+	}
+
+	c.JSON(http.StatusOK, groups)
 }
 
 type GuestInput struct {
@@ -870,4 +953,108 @@ func DeleteGuestsBulk(c *gin.Context) {
 		"message":       "Selected guests deleted successfully",
 		"deleted_count": result.RowsAffected,
 	})
+}
+
+// GetGiftAccounts mengambil semua rekening hadiah milik admin
+func GetGiftAccounts(c *gin.Context) {
+	weddingID, err := getWeddingIDFromAuth(c)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Wedding not found"})
+		return
+	}
+
+	var accounts []models.GiftAccount
+	if err := db.DB.Where("wedding_id = ?", weddingID).Find(&accounts).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch gift accounts"})
+		return
+	}
+
+	c.JSON(http.StatusOK, accounts)
+}
+
+// CreateGiftAccount membuat rekening hadiah baru
+func CreateGiftAccount(c *gin.Context) {
+	weddingID, err := getWeddingIDFromAuth(c)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Wedding not found"})
+		return
+	}
+
+	var input GiftAccountInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	account := models.GiftAccount{
+		WeddingID:     weddingID,
+		BankName:      input.BankName,
+		AccountNumber: input.AccountNumber,
+		AccountName:   input.AccountName,
+		QRCodeURL:     input.QRCodeURL,
+	}
+
+	if err := db.DB.Create(&account).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create gift account"})
+		return
+	}
+	c.JSON(http.StatusCreated, account)
+}
+
+// UpdateGiftAccount memperbarui rekening hadiah
+func UpdateGiftAccount(c *gin.Context) {
+	weddingID, err := getWeddingIDFromAuth(c)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Wedding not found"})
+		return
+	}
+
+	accountID := c.Param("id")
+	var input GiftAccountInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var account models.GiftAccount
+	// Cek kepemilikan
+	if err := db.DB.Where("id = ? AND wedding_id = ?", accountID, weddingID).First(&account).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Gift account not found"})
+		return
+	}
+
+	// Update data
+	account.BankName = input.BankName
+	account.AccountNumber = input.AccountNumber
+	account.AccountName = input.AccountName
+	account.QRCodeURL = input.QRCodeURL
+
+	if err := db.DB.Save(&account).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update gift account"})
+		return
+	}
+	c.JSON(http.StatusOK, account)
+}
+
+// DeleteGiftAccount menghapus rekening hadiah
+func DeleteGiftAccount(c *gin.Context) {
+	weddingID, err := getWeddingIDFromAuth(c)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Wedding not found"})
+		return
+	}
+
+	accountID := c.Param("id")
+	var account models.GiftAccount
+	// Cek kepemilikan
+	if err := db.DB.Where("id = ? AND wedding_id = ?", accountID, weddingID).First(&account).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Gift account not found"})
+		return
+	}
+
+	if err := db.DB.Delete(&account).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete gift account"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Gift account deleted"})
 }

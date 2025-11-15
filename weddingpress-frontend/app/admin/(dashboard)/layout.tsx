@@ -32,6 +32,7 @@ import {
   Settings,
   User,
   Users,
+  Gift, // <-- TAMBAHKAN IMPOR IKON INI
 } from "lucide-react";
 import { useIsClient } from "@/lib/hooks/useIsClient";
 
@@ -44,6 +45,7 @@ const navItems = [
   { href: "/admin/gallery", label: "Gallery", icon: Image },
   { href: "/admin/guests", label: "Guests", icon: Users },
   { href: "/admin/guestbook", label: "Guestbook", icon: Mail },
+  { href: "/admin/gifts", label: "Gifts", icon: Gift },
 ];
 
 function NavigationLinks({ inSheet = false }: { inSheet?: boolean }) {

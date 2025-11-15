@@ -26,12 +26,22 @@ type Wedding struct {
 	MusicURL      string `gorm:"size:512" json:"music_url"`
 	ThemeColor    string `gorm:"size:50" json:"theme_color"`
 
+	// --- TAMBAHKAN FIELD KUSTOMISASI DI SINI ---
+	// 'default:true' berarti semua bagian akan tampil secara default
+	ShowEvents    bool `gorm:"default:true" json:"show_events"`
+	ShowStory     bool `gorm:"default:true" json:"show_story"`
+	ShowGallery   bool `gorm:"default:true" json:"show_gallery"`
+	ShowGifts     bool `gorm:"default:true" json:"show_gifts"`
+	ShowGuestBook bool `gorm:"default:true" json:"show_guest_book"`
+	// ------------------------------------------
+
 	// Relasi
-	GroomBride GroomBride `gorm:"foreignKey:WeddingID" json:"groom_bride"` // Has One
-	Events     []Event    `gorm:"foreignKey:WeddingID" json:"events"`      // Has Many
-	Stories    []Story    `gorm:"foreignKey:WeddingID" json:"stories"`     // Has Many
-	Galleries  []Gallery  `gorm:"foreignKey:WeddingID" json:"galleries"`   // Has Many
-	Guests     []Guest    `gorm:"foreignKey:WeddingID" json:"guests"`      // Has Many
+	GroomBride   GroomBride    `gorm:"foreignKey:WeddingID" json:"groom_bride"`   // Has One
+	Events       []Event       `gorm:"foreignKey:WeddingID" json:"events"`        // Has Many
+	Stories      []Story       `gorm:"foreignKey:WeddingID" json:"stories"`       // Has Many
+	Galleries    []Gallery     `gorm:"foreignKey:WeddingID" json:"galleries"`     // Has Many
+	Guests       []Guest       `gorm:"foreignKey:WeddingID" json:"guests"`        // Has Many
+	GiftAccounts []GiftAccount `gorm:"foreignKey:WeddingID" json:"gift_accounts"` // <-- TAMBAHKAN RELASI INI
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -103,4 +113,14 @@ type GuestBook struct {
 	Message   string    `gorm:"type:text;not null" json:"message"`
 	Status    string    `gorm:"size:50;default:'pending'" json:"status"` // "pending" atau "approved"
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// GiftAccount untuk rekening bank atau e-wallet
+type GiftAccount struct {
+	ID            uint   `gorm:"primarykey" json:"id"`
+	WeddingID     uint   `gorm:"not null" json:"wedding_id"`              // Foreign key untuk Wedding
+	BankName      string `gorm:"size:100;not null" json:"bank_name"`      // Misal: "BCA", "GoPay"
+	AccountNumber string `gorm:"size:100;not null" json:"account_number"` // No. Rekening / No. HP
+	AccountName   string `gorm:"size:255;not null" json:"account_name"`   // Atas Nama
+	QRCodeURL     string `gorm:"size:512" json:"qr_code_url"`             // URL ke gambar QRIS (Opsional)
 }

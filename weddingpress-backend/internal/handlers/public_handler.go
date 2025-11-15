@@ -43,6 +43,7 @@ func GetInvitationBySlug(c *gin.Context) {
 			return db.Order("stories.\"order\" ASC") // Urutkan story
 		}).
 		Preload("Galleries").
+		Preload("GiftAccounts"). // <-- TAMBAHKAN PRELOAD INI
 		First(&wedding, guest.WeddingID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Data pernikahan tidak ditemukan"})
 		return

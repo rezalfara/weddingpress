@@ -8,10 +8,9 @@ import { GroomBrideSection } from "@/components/invitation/GroomBride";
 import { EventsSection } from "@/components/invitation/Events";
 import { StorySection } from "@/components/invitation/Story";
 import { GallerySection } from "@/components/invitation/Gallery";
+import { GiftSection } from "@/components/invitation/GiftSection";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail } from "lucide-react";
-
-// --- 1. IMPORT KOMPONEN BARU ---
 import { RSVPForm } from "@/components/invitation/RSVPForm";
 import { Guestbook } from "@/components/invitation/GuestBook";
 
@@ -34,21 +33,35 @@ export function InvitationClientPage({ data }: { data: InvitationData }) {
             animate={{ opacity: 1 }}
             transition={{ duration: 1.5 }}
           >
+            {/* Bagian Mempelai (GroomBride) biasanya selalu tampil */}
             <GroomBrideSection data={wedding.groom_bride} />
-            <EventsSection data={wedding.events} />
-            <StorySection data={wedding.stories} />
-            <GallerySection data={wedding.galleries} />
 
-            {/* --- 2. GANTI PLACEHOLDER DENGAN KOMPONEN ASLI --- */}
-            {/* Hapus placeholder div */}
+            {/* --- KONDISIONAL RENDER BERDASARKAN TOGGLE ADMIN --- */}
+
+            {/* Tampilkan Events jika show_events adalah true */}
+            {wedding.show_events && <EventsSection data={wedding.events} />}
+
+            {/* Tampilkan Story jika show_story adalah true */}
+            {wedding.show_story && <StorySection data={wedding.stories} />}
+
+            {/* Tampilkan Gallery jika show_gallery adalah true */}
+            {wedding.show_gallery && <GallerySection data={wedding.galleries} />}
+
+            {/* Tampilkan Gifts jika show_gifts adalah true DAN ada data rekening */}
+            {wedding.show_gifts && wedding.gift_accounts && wedding.gift_accounts.length > 0 && (
+              <GiftSection accounts={wedding.gift_accounts} />
+            )}
             
-            {/* Tambahkan Komponen RSVP */}
+            {/* RSVP Form (mungkin selalu tampil, karena penting) */}
             <RSVPForm guest={guest} />
             
-            {/* Tambahkan Komponen Guestbook */}
-            <Guestbook guestId={guest.id} weddingId={wedding.id} />
-            {/* ----------------------------------------------- */}
-
+            {/* Tampilkan Guestbook jika show_guest_book adalah true */}
+            {wedding.show_guest_book && (
+              <Guestbook guestId={guest.id} weddingId={wedding.id} />
+            )}
+            
+            {/* --- AKHIR KONDISIONAL RENDER --- */}
+            
           </motion.div>
         )}
       </AnimatePresence>
@@ -85,6 +98,7 @@ export function InvitationClientPage({ data }: { data: InvitationData }) {
                 className="mt-12" 
                 size="lg"
                 style={{
+                  // Menggunakan warna tema yang sudah diatur
                   backgroundColor: "var(--theme-color)",
                   color: "#ffffff"
                 }}

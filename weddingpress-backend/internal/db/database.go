@@ -51,6 +51,7 @@ func RunMigrations() {
 		&models.Gallery{},
 		&models.Guest{},
 		&models.GuestBook{},
+		&models.GiftAccount{}, // <-- TAMBAHKAN INI
 	)
 
 	if err != nil {

@@ -9,6 +9,15 @@ export interface User {
     created_at: string;
     updated_at: string;
   }
+
+  export interface GiftAccount {
+    id: number;
+    wedding_id: number;
+    bank_name: string;
+    account_number: string;
+    account_name: string;
+    qr_code_url: string; // Akan jadi string kosong jika tidak ada
+  }
   
   // Wedding adalah data utama undangan
   export interface Wedding {
@@ -23,6 +32,15 @@ export interface User {
     stories: Story[]; // Relasi Has Many
     galleries: Gallery[]; // Relasi Has Many
     guests: Guest[]; // Relasi Has Many
+    gift_accounts: GiftAccount[]; // <-- TAMBAHKAN INI
+    // --- TAMBAHKAN FIELD KUSTOMISASI DI SINI ---
+    // (nama field adalah snake_case dari JSON Go)
+    show_events: boolean;
+    show_story: boolean;
+    show_gallery: boolean;
+    show_gifts: boolean;
+    show_guest_book: boolean;
+    // ------------------------------------------
     created_at: string;
     updated_at: string;
   }

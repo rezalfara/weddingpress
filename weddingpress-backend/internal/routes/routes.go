@@ -54,6 +54,7 @@ func SetupRoutes(r *gin.Engine) {
 
 			// Guest
 			admin.GET("/guests", handlers.GetGuests)
+			admin.GET("/guests/groups", handlers.GetGuestGroups) // <-- TAMBAHKAN RUTE INI
 			admin.POST("/guest", handlers.CreateGuest)
 			admin.PUT("/guest/:id", handlers.UpdateGuest)
 			admin.DELETE("/guest/:id", handlers.DeleteGuest)
@@ -67,6 +68,13 @@ func SetupRoutes(r *gin.Engine) {
 			admin.GET("/guestbook", handlers.GetGuestBookAdmin)
 			admin.PUT("/guestbook/:id", handlers.UpdateGuestBookStatus) // Approve/Reject
 			admin.DELETE("/guestbook/:id", handlers.DeleteGuestBook)
+
+			// === TAMBAHKAN RUTE BARU DI SINI ===
+			// Gift Accounts (Amplop Digital)
+			admin.GET("/gift-accounts", handlers.GetGiftAccounts)
+			admin.POST("/gift-account", handlers.CreateGiftAccount)
+			admin.PUT("/gift-account/:id", handlers.UpdateGiftAccount)
+			admin.DELETE("/gift-account/:id", handlers.DeleteGiftAccount)
 		}
 
 		// --- Rute Publik (Untuk Halaman Undangan) ---
