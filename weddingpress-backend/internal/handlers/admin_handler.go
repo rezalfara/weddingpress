@@ -694,17 +694,35 @@ func GetGuestBookAdmin(c *gin.Context) {
 		return
 	}
 
+	// --- BARU: Ambil filter status dan search dari query parameter ---
+	statusFilter := c.Query("status")
+	searchQuery := c.Query("search")
+	// --- AKHIR BARU ---
+
 	var results []AdminGuestBookResponse
 
-	err = db.DB.Table("guest_books").
+	// Mulai query
+	query := db.DB.Table("guest_books").
 		Select("guest_books.id, guest_books.guest_id, guests.name as guest_name, guest_books.message, guest_books.status, guest_books.created_at").
 		Joins("JOIN guests ON guests.id = guest_books.guest_id").
-		Where("guests.wedding_id = ?", weddingID).
-		Order("guest_books.created_at DESC").
-		Scan(&results).Error
+		Where("guests.wedding_id = ?", weddingID)
+
+	// Tambahkan filter status
+	if statusFilter == "pending" || statusFilter == "approved" {
+		query = query.Where("guest_books.status = ?", statusFilter)
+	}
+
+	// --- BARU: Tambahkan filter pencarian (berdasarkan nama tamu) ---
+	if searchQuery != "" {
+		// Filter berdasarkan nama tamu. Gunakan ILIKE (PostgreSQL)
+		query = query.Where("guests.name ILIKE ?", "%"+searchQuery+"%")
+	}
+	// --- AKHIR BARU ---
+
+	err = query.Order("guest_books.created_at DESC").Scan(&results).Error
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch guestbook entries"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil ucapan"})
 		return
 	}
 
@@ -955,6 +973,48 @@ func DeleteGuestsBulk(c *gin.Context) {
 	})
 }
 
+// BulkDeleteGuestBook menghapus banyak ucapan sekaligus
+func BulkDeleteGuestBook(c *gin.Context) {
+	weddingID, err := getWeddingIDFromAuth(c)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Wedding not found"})
+		return
+	}
+
+	var input BulkDeleteInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// --- PERBAIKAN GORM DIMULAI DI SINI ---
+
+	// 1. Tentukan Guest IDs yang valid (yaitu, GuestID yang terikat dengan WeddingID ini)
+	validGuestIDs := db.DB.Model(&models.Guest{}).Select("id").Where("wedding_id = ?", weddingID)
+
+	// 2. Lakukan penghapusan pada tabel guest_books:
+	//    Hapus jika ID ada di input.IDs AND guest_id ada di validGuestIDs (multi-tenancy)
+	result := db.DB.Where("id IN (?)", input.IDs).
+		Where("guest_id IN (?)", validGuestIDs).
+		Delete(&models.GuestBook{})
+
+	// --- PERBAIKAN SELESAI ---
+
+	if result.Error != nil {
+		// Gunakan pesan error yang lebih informatif
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghapus entri Guestbook secara massal"})
+		return
+	}
+
+	// Cek apakah ada baris yang benar-benar terhapus (opsional)
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"message": "Tidak ada ucapan yang ditemukan atau diizinkan untuk dihapus"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("%d ucapan Guestbook berhasil dihapus", result.RowsAffected)})
+}
+
 // GetGiftAccounts mengambil semua rekening hadiah milik admin
 func GetGiftAccounts(c *gin.Context) {
 	weddingID, err := getWeddingIDFromAuth(c)
@@ -964,7 +1024,7 @@ func GetGiftAccounts(c *gin.Context) {
 	}
 
 	var accounts []models.GiftAccount
-	if err := db.DB.Where("wedding_id = ?", weddingID).Find(&accounts).Error; err != nil {
+	if err := db.DB.Where("wedding_id = ?", weddingID).Order("bank_name ASC").Find(&accounts).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch gift accounts"})
 		return
 	}

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
-  FormDescription, // Impor FormDescription
+  FormDescription, // Digunakan untuk teks deskriptif
   FormField,
   FormItem,
   FormLabel,
@@ -21,37 +21,35 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { ImageUpload } from "@/components/ImageUpload";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch"; // <-- Impor Switch
-import { Loader2 } from "lucide-react"; // <-- Impor Loader2
+import { Switch } from "@/components/ui/switch";
+import { Loader2 } from "lucide-react";
 
-// Skema Zod (MODIFIKASI)
+// Skema Zod (Tidak Berubah)
 const formSchema = z.object({
   wedding_title: z.string().min(1, "Judul tidak boleh kosong"),
   cover_image_url: z.string().url("URL tidak valid").or(z.literal("")),
   music_url: z.string().url("URL tidak valid").or(z.literal("")),
   theme_color: z.string().startsWith("#", "Wajib kode hex").or(z.literal("")),
   
-  // --- BARU: Kustomisasi Tampilan ---
   show_events: z.boolean(),
   show_story: z.boolean(),
   show_gallery: z.boolean(),
   show_gifts: z.boolean(),
   show_guest_book: z.boolean(),
-  // ----------------------------------
 
   groom_bride: z.object({
     groom_name: z.string(),
-    groom_photo_url: z.string().url("URL tidak valid").or(z.literal("")),
+    groom_photo_url: z.string().url().or(z.literal("")),
     groom_bio: z.string(),
     bride_name: z.string(),
-    bride_photo_url: z.string().url("URL tidak valid").or(z.literal("")),
+    bride_photo_url: z.string().url().or(z.literal("")),
     bride_bio: z.string(),
   }),
 });
@@ -68,14 +66,11 @@ export default function WeddingPage() {
       cover_image_url: "",
       music_url: "",
       theme_color: "#000000",
-      
-      // Set nilai default awal untuk form (jika data belum ada)
       show_events: true,
       show_story: true,
       show_gallery: true,
       show_gifts: true,
       show_guest_book: true,
-
       groom_bride: {
         groom_name: "",
         groom_photo_url: "",
@@ -87,7 +82,6 @@ export default function WeddingPage() {
     },
   });
 
-  // useEffect (MODIFIKASI)
   useEffect(() => {
     if (weddingData) {
       form.reset({
@@ -96,14 +90,12 @@ export default function WeddingPage() {
         music_url: weddingData.music_url || "",
         theme_color: weddingData.theme_color || "#000000",
         
-        // --- BARU: Mengisi nilai toggle dari data backend ---
         show_events: weddingData.show_events ?? true,
         show_story: weddingData.show_story ?? true,
         show_gallery: weddingData.show_gallery ?? true,
         show_gifts: weddingData.show_gifts ?? true,
         show_guest_book: weddingData.show_guest_book ?? true,
-        // ----------------------------------------------------
-
+        
         groom_bride: {
           groom_name: weddingData.groom_bride?.groom_name || "",
           groom_photo_url: weddingData.groom_bride?.groom_photo_url || "",
@@ -116,11 +108,18 @@ export default function WeddingPage() {
     }
   }, [weddingData, form]);
 
-  // onSubmit (MODIFIKASI)
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      // Pastikan semua field dikirimkan
-      await api.put("/admin/wedding", values);
+      const payload = {
+        ...values,
+        groom_bride: {
+          id: weddingData?.groom_bride?.id, 
+          wedding_id: weddingData?.groom_bride?.wedding_id,
+          ...values.groom_bride, 
+        }
+      };
+
+      await api.put("/admin/wedding", payload);
       mutate();
       toast.success("Sukses", {
         description: "Data pernikahan berhasil diperbarui.",
@@ -139,75 +138,93 @@ export default function WeddingPage() {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold">Pengaturan Wedding</h1>
+          <h1 className="text-2xl font-bold">Pengaturan Wedding</h1>
           <Button type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Menyimapan...</> : "Simpan Perubahan"}
           </Button>
         </div>
 
-        {/* --- MODIFIKASI: GUNAKAN TABS GRID-COLS-3 --- */}
         <Tabs defaultValue="umum" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 max-w-2xl">
+          {/* --- MODIFIKASI: TAB SPACING --- */}
+          <TabsList className="flex flex-wrap justify-start p-1 gap-2 max-w-full">
             <TabsTrigger value="umum">Pengaturan Umum</TabsTrigger>
             <TabsTrigger value="mempelai">Data Mempelai</TabsTrigger>
             <TabsTrigger value="kustomisasi">Kustomisasi</TabsTrigger>
           </TabsList>
+          {/* --- AKHIR MODIFIKASI: TAB SPACING --- */}
 
-          {/* === KONTEN TAB 1: PENGATURAN UMUM (Tidak Berubah) === */}
+          {/* === KONTEN TAB 1: PENGATURAN UMUM (INTERAKTIF) === */}
           <TabsContent value="umum">
             <Card>
               <CardHeader>
                 <CardTitle>Pengaturan Umum</CardTitle>
+                <CardDescription>Judul, tema warna, dan media utama undangan.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-6">
+                
+                {/* Judul Pernikahan */}
                 <FormField
                   control={form.control}
                   name="wedding_title"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Judul Pernikahan</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
+                      <FormLabel>Judul Undangan</FormLabel>
+                      <FormControl><Input placeholder="Pernikahan Budi & Ani" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+                
+                {/* WARNA TEMA (Interaktif Swatch) */}
                 <FormField
                   control={form.control}
                   name="theme_color"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Warna Tema (Hex)</FormLabel>
-                      <FormControl>
-                        <Input type="color" className="h-10 w-24 p-0" {...field} />
-                      </FormControl>
+                      <div className="flex items-center space-x-4">
+                        <FormControl>
+                          <Input type="color" {...field} className="h-10 w-16 p-0" />
+                        </FormControl>
+                        <FormControl>
+                          <Input {...field} placeholder="#RRGGBB" className="w-40" />
+                        </FormControl>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                {/* URL Musik */}
                 <FormField
                   control={form.control}
                   name="music_url"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>URL Musik (MP3)</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="https://..." />
-                      </FormControl>
+                      <FormLabel>URL Musik (MP3/YouTube)</FormLabel>
+                      <FormControl><Input {...field} placeholder="https://..." /></FormControl>
+                      <FormDescription>Gunakan URL hosting file MP3 atau URL embed YouTube.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                {/* COVER IMAGE (Interactive Upload/Preview) */}
                 <FormField
                   control={form.control}
                   name="cover_image_url"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Cover Image</FormLabel>
+                      <FormLabel>Cover Image Preview & Upload</FormLabel>
                       <FormControl>
-                        <ImageUpload value={field.value} onChange={field.onChange} />
+                        {/* Hapus properti placeholder yang menyebabkan error */}
+                        <ImageUpload 
+                            value={field.value} 
+                            onChange={field.onChange} 
+                        /> 
                       </FormControl>
+                      {/* Gabungkan deskripsi untuk pengalaman yang lebih baik */}
+                      <FormDescription>Klik atau seret gambar cover ke area di atas. Pastikan gambar beresolusi tinggi dan memiliki rasio yang baik.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -232,9 +249,7 @@ export default function WeddingPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Nama Mempelai Pria</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
+                        <FormControl><Input {...field} /></FormControl>
                       </FormItem>
                     )}
                   />
@@ -244,9 +259,7 @@ export default function WeddingPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Bio Pria</FormLabel>
-                        <FormControl>
-                          <Textarea {...field} />
-                        </FormControl>
+                        <FormControl><Textarea {...field} /></FormControl>
                       </FormItem>
                     )}
                   />
@@ -273,9 +286,7 @@ export default function WeddingPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Nama Mempelai Wanita</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
+                        <FormControl><Input {...field} /></FormControl>
                       </FormItem>
                     )}
                   />
@@ -285,9 +296,7 @@ export default function WeddingPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Bio Wanita</FormLabel>
-                        <FormControl>
-                          <Textarea {...field} />
-                        </FormControl>
+                        <FormControl><Textarea {...field} /></FormControl>
                       </FormItem>
                     )}
                   />
@@ -308,7 +317,7 @@ export default function WeddingPage() {
             </Card>
           </TabsContent>
 
-          {/* === KONTEN TAB 3: KUSTOMISASI TAMPILAN (BARU) === */}
+          {/* === KONTEN TAB 3: KUSTOMISASI TAMPILAN (Tidak Berubah) === */}
           <TabsContent value="kustomisasi">
             <Card>
               <CardHeader><CardTitle>Kustomisasi Tampilan Bagian</CardTitle></CardHeader>

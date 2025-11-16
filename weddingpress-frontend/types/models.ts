@@ -133,3 +133,13 @@ export interface User {
       email: string;
     };
   }
+
+export type GuestbookStatus = "pending" | "approved";
+export interface GuestbookEntry {
+  id: number;
+  guest_id: number;
+  guest_name: string;
+  message: string;
+  status: GuestbookStatus;
+  created_at: string; // Akan di-parse sebagai string tanggal
+}

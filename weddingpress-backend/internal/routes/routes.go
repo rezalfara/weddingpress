@@ -68,6 +68,7 @@ func SetupRoutes(r *gin.Engine) {
 			admin.GET("/guestbook", handlers.GetGuestBookAdmin)
 			admin.PUT("/guestbook/:id", handlers.UpdateGuestBookStatus) // Approve/Reject
 			admin.DELETE("/guestbook/:id", handlers.DeleteGuestBook)
+			admin.DELETE("/guestbook/bulk", handlers.BulkDeleteGuestBook) // <-- TAMBAHKAN INI
 
 			// === TAMBAHKAN RUTE BARU DI SINI ===
 			// Gift Accounts (Amplop Digital)
