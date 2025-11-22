@@ -26,12 +26,40 @@ api.interceptors.request.use(
 
     if (token) {
       // Jika token ada, tambahkan ke header
-      config.headers["Authorization"] = `Bearer ${token}`; //
+      config.headers["Authorization"] = `Bearer ${token}`;
     }
     return config;
   },
   (error) => {
     // Lakukan sesuatu jika ada error pada request
+    return Promise.reject(error);
+  }
+);
+
+/**
+ * Axios Response Interceptor (BAGIAN BARU)
+ * * Interceptor ini berjalan SETELAH menerima respon dari backend.
+ * * Kita gunakan untuk menangkap error 401 (Unauthorized) secara global.
+ */
+api.interceptors.response.use(
+  (response) => {
+    // Jika request sukses (status 2xx), teruskan respon apa adanya
+    return response;
+  },
+  (error) => {
+    // Cek apakah ada response dari server dan statusnya 401 (Unauthorized)
+    if (error.response && error.response.status === 401) {
+      // Token tidak valid atau kadaluarsa (misal: karena deploy ulang backend).
+      // Lakukan logout paksa untuk menghapus state user & token dari localStorage.
+      useAuthStore.getState().logout();
+      
+      // Catatan: Kita tidak perlu melakukan redirect manual (router.replace) di sini
+      // karena DashboardLayout Anda sudah memiliki useEffect yang memantau perubahan token.
+      // Begitu logout() dijalankan, token menjadi null, dan layout akan otomatis melempar ke login.
+    }
+    
+    // Kembalikan error agar komponen yang memanggil request tetap tahu bahwa request gagal
+    // (misal: untuk mematikan loading spinner atau menampilkan pesan error lain)
     return Promise.reject(error);
   }
 );
