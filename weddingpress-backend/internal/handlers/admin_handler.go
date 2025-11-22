@@ -80,6 +80,10 @@ type UpdateWeddingInput struct {
 	ThemeColor    string            `json:"theme_color"`
 	GroomBride    models.GroomBride `json:"groom_bride"`
 
+	// --- TAMBAHAN ---
+	Template string `json:"template"`
+	// ----------------
+
 	// --- TAMBAHKAN FIELD KUSTOMISASI DI SINI ---
 	ShowEvents    bool `json:"show_events"`
 	ShowStory     bool `json:"show_story"`
@@ -113,7 +117,7 @@ func UpdateMyWedding(c *gin.Context) {
 	// --- PERBAIKAN DI SINI ---
 	// Kita harus menggunakan .Select() untuk memaksa GORM meng-update field 'false' (zero value).
 	fieldsToUpdate := []string{
-		"WeddingTitle", "CoverImageURL", "MusicURL", "ThemeColor",
+		"WeddingTitle", "CoverImageURL", "MusicURL", "ThemeColor", "Template",
 		"ShowEvents", "ShowStory", "ShowGallery", "ShowGifts", "ShowGuestBook",
 	}
 
@@ -124,6 +128,7 @@ func UpdateMyWedding(c *gin.Context) {
 		CoverImageURL: input.CoverImageURL,
 		MusicURL:      input.MusicURL,
 		ThemeColor:    input.ThemeColor,
+		Template:      input.Template, // <-- Simpan input template
 
 		ShowEvents:    input.ShowEvents,
 		ShowStory:     input.ShowStory,

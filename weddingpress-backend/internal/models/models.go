@@ -26,6 +26,10 @@ type Wedding struct {
 	MusicURL      string `gorm:"size:512" json:"music_url"`
 	ThemeColor    string `gorm:"size:50" json:"theme_color"`
 
+	// --- TAMBAHAN FITUR TEMPLATE ---
+	Template string `gorm:"size:50;default:'modern'" json:"template"`
+	// ------------------------------
+
 	// --- TAMBAHKAN FIELD KUSTOMISASI DI SINI ---
 	// 'default:true' berarti semua bagian akan tampil secara default
 	ShowEvents    bool `gorm:"default:true" json:"show_events"`

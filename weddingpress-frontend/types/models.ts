@@ -27,6 +27,9 @@ export interface User {
     cover_image_url: string;
     music_url: string;
     theme_color: string;
+    // --- TAMBAHAN ---
+    template: string; // e.g., "modern", "classic"
+    // ----------------
     groom_bride: GroomBride; // Relasi Has One
     events: Event[]; // Relasi Has Many
     stories: Story[]; // Relasi Has Many
